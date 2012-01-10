@@ -1,0 +1,228 @@
+Spring Security tutorial steps
+==============================
+- 인증체계 없는 앱
+- 보안처리를 위한 기본환경 준비
+- 단계적 보안처리
+- 서비스 레이어(메소드 레벨) 보안처리
+- 화면 레벨의 보안처리
+- 리멤버미
+- 메소드레벨 추가 보안방식 (jsr-250호환용)
+- access rule
+
+인증체계 없는 앱
+================
+
+1. web.xml 고치기
+
+<web-app version="2.5" xmlns="http://java.sun.com/xml/ns/javaee"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://java.sun.com/xml/ns/javaee 
+            http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd">
+    
+    <display-name>Spring Security Tutorial Application</display-name>
+    
+    <!--
+      - Location of the XML file that defines the root application context
+      - Applied by ContextLoaderListener.
+     -->
+    <context-param>
+        <param-name>contextConfigLocation</param-name>
+        <param-value>
+            classpath:applicationContext-business.xml
+        </param-value>
+    </context-param>
+
+    <listener>
+        <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+    </listener>
+    <!--
+      - Provides core MVC application controller. See bank-servlet.xml.
+     -->
+    <servlet>
+        <servlet-name>bank</servlet-name>
+        <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+    
+    <servlet-mapping>
+        <servlet-name>bank</servlet-name>
+        <url-pattern>*.html</url-pattern>
+    </servlet-mapping>
+    
+    <welcome-file-list>
+        <welcome-file>index.jsp</welcome-file>
+    </welcome-file-list>
+</web-app>
+
+
+2. 확인
+http://localhost:8080/listAccounts.html
+
+
+보안처리를 위한 기본환경 준비
+===========================
+1. web.xml에 security-app-context.xml 추가
+
+<context-param>
+   <param-name>contextConfigLocation</param-name>
+   <param-value>
+       classpath:applicationContext-business.xml
+       /WEB-INF/security-app-context.xml
+   </param-value>
+</context-param>
+
+2. web.xml에 스프링 보안 필터추가
+<filter>
+    <filter-name>springSecurityFilterChain</filter-name>
+    <filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
+</filter>
+
+<filter-mapping>
+  <filter-name>springSecurityFilterChain</filter-name>
+  <url-pattern>/*</url-pattern>
+</filter-mapping>
+	   
+
+3. security-app-context.xml 파일 설정
+
+<beans:beans xmlns="http://www.springframework.org/schema/security"
+    xmlns:beans="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans 
+                    http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+                    http://www.springframework.org/schema/security 
+                    http://www.springframework.org/schema/security/spring-security-3.1.xsd">
+
+    <http use-expressions="true">
+        <intercept-url pattern="/**" access="permitAll" />
+        <form-login />
+    </http>
+
+    <authentication-manager>
+        <authentication-provider>
+            <user-service>
+                <user name="rod" password="koala" authorities="supervisor, teller, user" />
+                <user name="dianne" password="emu" authorities="teller, user" />
+                <user name="scott" password="wombat" authorities="user" />
+                <user name="peter" password="opal" authorities="user" />
+            </user-service>
+        </authentication-provider>
+    </authentication-manager>
+</beans:beans>   
+
+4. 모든 URL에 접근 가능한지 확인
+
+
+단계적 보안처리
+===============
+
+첫 페이지 : 누구나
+/secure :인증처리된 유저만
+/secure/extreme: 관리자만
+accountList.html 페이지 : 인증처리된 유저만
+ - teller, superviosor 잔고 수정가능
+ - user는 보기만 가능
+
+
+1. http 블럭에 pattern 추가
+
+<http use-expressions="true">
+    <intercept-url pattern="/index.jsp" access="permitAll" />
+    <intercept-url pattern="/secure/**" access="isAuthenticated()" />
+    <intercept-url pattern="/secure/extreme/**" access="hasRole('supervisor')" />
+    <intercept-url pattern="/listAccounts.html" access="isAuthenticated()" />
+    <intercept-url pattern="/post.html" access="hasAnyRole('supervisor','teller')" />
+    <intercept-url pattern="/**" access="denyAll" />
+    <form-login />
+</http>
+
+2. 접근확인
+
+3. 우선순위에 맞게 블럭 패턴 조정
+
+4. 필터 제외 설정
+
+	<http pattern="/static/**" security="none" />
+	
+5. logout 제외 설정 <http use-expressions="true"> 안에
+        <logout />
+
+		http://localhost:8080/j_spring_security_logout
+		
+6. 패스워드 처리
+<beans:bean id="encoder" 
+    class="org.springframework.security.crypto.password.StandardPasswordEncoder"/>
+
+<authentication-manager>
+  <authentication-provider>
+    <password-encoder ref="encoder" />
+    <user-service>
+      <user name="rod" 
+          password="864acff7515e4e419d4266e474ea14a889dce340784038b704a30453e01245eed374f881f3df8e1e" 
+          authorities="supervisor, teller, user" />
+      <user name="dianne" 
+          password="9992e040d32b6a688ff45b6e53fd0f5f1689c754ecf638cce5f09aa57a68be3c6dae699091e58324" 
+          authorities="teller, user" />
+      <user name="scott" 
+          password="ab8d9744fa4dd5cee6eb692406fd29564267bad7c606837a70c44583b72e5684ec5f55c9dea869a5"
+          authorities="user" />
+      <user name="peter" 
+          password="e446d30fcb00dc48d7e9fac49c2fec6a945171702e6822e1ec48f1ac1407902759fe30ed66a068df" 
+          authorities="user" />
+      </user-service>
+  </authentication-provider>
+</authentication-manager>
+
+
+서비스 레이어(메소드 레벨) 보안처리
+===================================
+
+1. <http> 항목 위에 global-method-security 추가
+<global-method-security pre-post-annotations="enabled" />
+
+2. BankService 인터페이스 확인 및 수정
+
+화면 레벨의 보안처리
+====================
+1.방식#1
+<sec:authorize url="/account/home.do">
+...
+</sec:authorize>
+
+2.방식#2
+<sec:authorize access="hasRole('ROLE_USER') and fullyAuthenticated">
+...
+</sec:authorize>
+
+
+리멤버미
+========
+<remember-me/>
+
+메소드레벨 추가 보안방식 (jsr-250호환용)
+========================================
+<global-method-security jsr250-annotations="enabled"/>
+
+@RolesAllowed("ROLE_USER", "ROLE_ADMIN")
+public...
+
+
+access rule
+===========
+permitAll
+denyAll
+anonymous
+authenticated
+rememberMe
+fullyAuthenticated
+
+SpEL method 방식
+hasIpAddress(ipAddress)
+hasRole(role)
+hasAnyRole(role)
+
+
+
+추가 확인할 내용
+- SpringEL
+- deny 등의 페이지 커스터마이징
